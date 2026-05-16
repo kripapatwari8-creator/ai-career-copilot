@@ -4,18 +4,10 @@ const API_URL = "https://career-copilot-backend2.onrender.com";
 
 function App() {
 
-  // =========================
-  // STATES
-  // =========================
-
   const [resumeText, setResumeText] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-
-  // =========================
-  // ANALYZE TEXT RESUME
-  // =========================
 
   async function analyzeResume() {
 
@@ -32,11 +24,9 @@ function App() {
         `${API_URL}/analyze`,
         {
           method: "POST",
-
           headers: {
             "Content-Type": "application/json"
           },
-
           body: JSON.stringify({
             resume_text: resumeText
           })
@@ -56,10 +46,6 @@ function App() {
 
     setLoading(false);
   }
-
-  // =========================
-  // PDF UPLOAD
-  // =========================
 
   async function uploadResume() {
 
@@ -97,10 +83,6 @@ function App() {
 
     setLoading(false);
   }
-
-  // =========================
-  // UI
-  // =========================
 
   return (
 
