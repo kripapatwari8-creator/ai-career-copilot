@@ -27,7 +27,7 @@ function App() {
     try {
 
       const response = await fetch(
-        "http://127.0.0.1:8000/analyze",
+        "https://career-copilot-backend2.onrender.com",
         {
           method: "POST",
 
@@ -75,7 +75,7 @@ function App() {
     try {
 
       const response = await fetch(
-        "http://127.0.0.1:8000/upload",
+        "https://career-copilot-backend2.onrender.com/upload",
         {
           method: "POST",
           body: formData
