@@ -1,23 +1,25 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
-import os
+from google import genai
 from dotenv import load_dotenv
-import fitz  # PyMuPDF
+import fitz
+import os
 import json
 
 # =========================
-# LOAD ENV VARIABLES
+# LOAD ENV
 # =========================
 
 load_dotenv()
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-genai.configure(api_key=GOOGLE_API_KEY)
+# =========================
+# GEMINI CLIENT
+# =========================
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # =========================
 # FASTAPI APP
@@ -45,10 +47,20 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
+# HOME ROUTE
+# =========================
+
+@app.get("/")
+def home():
+    return {
+        "message": "AI Career Copilot Backend Running"
+    }
+
+# =========================
 # PDF TEXT EXTRACTION
 # =========================
 
-def extract_text_from_pdf(pdf_bytes):
+def extract_pdf_text(pdf_bytes):
 
     text = ""
 
@@ -63,7 +75,7 @@ def extract_text_from_pdf(pdf_bytes):
 # AI ANALYSIS FUNCTION
 # =========================
 
-def analyze_resume_with_ai(resume_text):
+def analyze_resume(resume_text):
 
     prompt = f"""
 You are an expert ATS Resume Analyzer and FAANG Career Mentor.
@@ -71,9 +83,6 @@ You are an expert ATS Resume Analyzer and FAANG Career Mentor.
 Analyze this resume deeply.
 
 Return ONLY valid JSON.
-
-Resume:
-{resume_text}
 
 JSON format:
 
@@ -90,11 +99,18 @@ JSON format:
   "roadmap": [],
   "ai_feedback": ""
 }}
+
+Resume:
+
+{resume_text}
 """
 
     try:
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
 
         raw_text = response.text.strip()
 
@@ -118,39 +134,47 @@ JSON format:
             "faang_readiness": 0,
             "predicted_role": "Error",
             "roadmap": [],
-            "ai_feedback": "AI response failed."
+            "ai_feedback": str(e)
         }
 
 # =========================
-# ROOT ROUTE
-# =========================
-
-@app.get("/")
-def home():
-    return {"message": "AI Career Copilot Backend Running"}
-
-# =========================
-# TEXT RESUME ANALYSIS
+# ANALYZE TEXT RESUME
 # =========================
 
 @app.post("/analyze")
-def analyze_resume(data: ResumeRequest):
+def analyze_text_resume(data: ResumeRequest):
 
-    result = analyze_resume_with_ai(data.resume_text)
-
-    return result
+    return analyze_resume(data.resume_text)
 
 # =========================
-# PDF UPLOAD ANALYSIS
+# UPLOAD PDF RESUME
 # =========================
 
 @app.post("/upload")
 async def upload_resume(file: UploadFile = File(...)):
 
-    pdf_bytes = await file.read()
+    try:
 
-    extracted_text = extract_text_from_pdf(pdf_bytes)
+        pdf_bytes = await file.read()
 
-    result = analyze_resume_with_ai(extracted_text)
+        extracted_text = extract_pdf_text(pdf_bytes)
 
-    return result
+        result = analyze_resume(extracted_text)
+
+        return result
+
+    except Exception as e:
+
+        return {
+            "resume_score": 0,
+            "ats_score": 0,
+            "strengths": [],
+            "weaknesses": [],
+            "suggestions": [str(e)],
+            "found_skills": [],
+            "missing_skills": [],
+            "faang_readiness": 0,
+            "predicted_role": "PDF Upload Error",
+            "roadmap": [],
+            "ai_feedback": str(e)
+        }
