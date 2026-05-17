@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,10 +18,34 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # =========================
-# GEMINI MODEL
+# TRY AVAILABLE MODELS
 # =========================
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+AVAILABLE_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+]
+
+model = None
+
+for model_name in AVAILABLE_MODELS:
+
+    try:
+
+        temp_model = genai.GenerativeModel(model_name)
+
+        test = temp_model.generate_content("Hello")
+
+        if test:
+
+            model = temp_model
+            print(f"Using Gemini Model: {model_name}")
+            break
+
+    except Exception as e:
+
+        print(f"Model failed: {model_name}")
+        print(e)
 
 # =========================
 # FASTAPI APP
@@ -50,7 +73,7 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# HOME ROUTE
+# ROOT ROUTE
 # =========================
 
 @app.get("/")
@@ -58,84 +81,93 @@ def home():
     return {"message": "AI Career Copilot Backend Running"}
 
 # =========================
-# ANALYZE FUNCTION
+# RESUME ANALYZER
 # =========================
 
 def analyze_resume_text(resume_text):
 
+    # =========================
+    # IF MODEL FAILED
+    # =========================
+
+    if model is None:
+
+        return {
+            "resume_score": 0,
+            "ats_score": 0,
+            "strengths": [],
+            "weaknesses": [],
+            "suggestions": [
+                "Gemini API quota exceeded OR invalid API key."
+            ],
+            "found_skills": [],
+            "missing_skills": [],
+            "faang_readiness": 0,
+            "predicted_role": "AI Service Unavailable",
+            "roadmap": [],
+            "ai_feedback": "The AI service is currently unavailable due to API quota limits."
+        }
+
+    # =========================
+    # PROMPT
+    # =========================
+
     prompt = f"""
-You are a world-class ATS Resume Analyzer, Career Mentor, and FAANG Hiring Expert.
+You are an expert ATS Resume Analyzer and FAANG Career Mentor.
 
-Analyze the following resume deeply.
+Analyze the following resume deeply and professionally.
 
-RESUME:
+Resume:
 {resume_text}
 
-Your task:
-- Evaluate ATS compatibility
-- Evaluate FAANG readiness
-- Predict most suitable role
-- Detect strengths and weaknesses
-- Detect missing industry skills
-- Generate a highly personalized career roadmap
-- Generate detailed career guidance
+Return ONLY VALID JSON.
 
-IMPORTANT RULES:
-- Be VERY detailed
-- Be professional
-- Give realistic insights
-- Mention technical improvements
-- Mention resume formatting quality
-- Mention interview preparation guidance
-- Mention project improvements
-- Mention missing tools/frameworks
-- Give detailed roadmap steps
-
-Return ONLY valid JSON.
-
-FORMAT:
+Format:
 
 {{
   "resume_score": 75,
   "ats_score": 88,
-
   "strengths": [
-    "Detailed point",
-    "Detailed point"
+    "point1",
+    "point2"
   ],
-
   "weaknesses": [
-    "Detailed point",
-    "Detailed point"
+    "point1",
+    "point2"
   ],
-
   "suggestions": [
-    "Detailed suggestion",
-    "Detailed suggestion"
+    "point1",
+    "point2"
   ],
-
   "found_skills": [
     "Python",
     "React"
   ],
-
   "missing_skills": [
     "Docker",
     "AWS"
   ],
-
-  "faang_readiness": 50,
-
+  "faang_readiness": 40,
   "predicted_role": "Software Engineer",
-
   "roadmap": [
-    "Detailed roadmap step",
-    "Detailed roadmap step"
+    "step1",
+    "step2",
+    "step3"
   ],
-
-  "ai_feedback": "A VERY DETAILED personalized career analysis paragraph."
+  "ai_feedback": "Give detailed personalized career guidance."
 }}
+
+IMPORTANT:
+- Give detailed roadmap
+- Give ATS-specific suggestions
+- Give realistic FAANG readiness
+- Give detailed career guidance paragraph
+- Return ONLY JSON
 """
+
+    # =========================
+    # GEMINI CALL
+    # =========================
 
     try:
 
@@ -143,10 +175,8 @@ FORMAT:
 
         text = response.text.strip()
 
-        # remove markdown wrappers
         text = text.replace("```json", "")
         text = text.replace("```", "")
-        text = text.strip()
 
         data = json.loads(text)
 
@@ -163,13 +193,13 @@ FORMAT:
             "found_skills": [],
             "missing_skills": [],
             "faang_readiness": 0,
-            "predicted_role": "Error",
+            "predicted_role": "AI Error",
             "roadmap": [],
             "ai_feedback": f"Error occurred: {str(e)}"
         }
 
 # =========================
-# TEXT ANALYSIS
+# TEXT ANALYSIS API
 # =========================
 
 @app.post("/analyze")
@@ -180,7 +210,7 @@ async def analyze_resume(data: ResumeRequest):
     return result
 
 # =========================
-# PDF ANALYSIS
+# PDF UPLOAD API
 # =========================
 
 @app.post("/upload")
@@ -214,6 +244,5 @@ async def upload_resume(file: UploadFile = File(...)):
             "faang_readiness": 0,
             "predicted_role": "PDF Upload Error",
             "roadmap": [],
-            "ai_feedback": f"PDF processing failed: {str(e)}"
+            "ai_feedback": ""
         }
-
