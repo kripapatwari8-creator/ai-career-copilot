@@ -1,25 +1,24 @@
+
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from google import genai
+import google.generativeai as genai
+import os
 from dotenv import load_dotenv
 import fitz
-import os
 import json
 
 # =========================
-# LOAD ENV
+# LOAD ENV VARIABLES
 # =========================
 
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# =========================
-# GEMINI CLIENT
-# =========================
+genai.configure(api_key=GEMINI_API_KEY)
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # =========================
 # FASTAPI APP
@@ -47,78 +46,58 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# HOME ROUTE
+# ROOT ROUTE
 # =========================
 
 @app.get("/")
 def home():
-    return {
-        "message": "AI Career Copilot Backend Running"
-    }
+    return {"message": "AI Career Copilot Backend Running"}
 
 # =========================
-# PDF TEXT EXTRACTION
+# ANALYZE FUNCTION
 # =========================
 
-def extract_pdf_text(pdf_bytes):
-
-    text = ""
-
-    pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-
-    for page in pdf_document:
-        text += page.get_text()
-
-    return text
-
-# =========================
-# AI ANALYSIS FUNCTION
-# =========================
-
-def analyze_resume(resume_text):
+def analyze_resume_text(resume_text):
 
     prompt = f"""
-You are an expert ATS Resume Analyzer and FAANG Career Mentor.
+    You are an expert ATS Resume Analyzer and FAANG Career Mentor.
 
-Analyze this resume deeply.
+    Analyze this resume carefully.
 
-Return ONLY valid JSON.
+    Resume:
+    {resume_text}
 
-JSON format:
+    Return ONLY valid JSON in this exact format:
 
-{{
-  "resume_score": number,
-  "ats_score": number,
-  "strengths": [],
-  "weaknesses": [],
-  "suggestions": [],
-  "found_skills": [],
-  "missing_skills": [],
-  "faang_readiness": number,
-  "predicted_role": "",
-  "roadmap": [],
-  "ai_feedback": ""
-}}
+    {{
+      "resume_score": 85,
+      "ats_score": 90,
+      "strengths": ["point1", "point2"],
+      "weaknesses": ["point1", "point2"],
+      "suggestions": ["point1", "point2"],
+      "found_skills": ["Python", "React"],
+      "missing_skills": ["Docker", "AWS"],
+      "faang_readiness": 80,
+      "predicted_role": "Software Engineer",
+      "roadmap": [
+        "Step 1",
+        "Step 2",
+        "Step 3"
+      ],
+      "ai_feedback": "Detailed personalized career guidance here."
+    }}
+    """
 
-Resume:
+    response = model.generate_content(prompt)
 
-{resume_text}
-"""
+    text = response.text.strip()
+
+    # remove markdown formatting
+    text = text.replace("```json", "")
+    text = text.replace("```", "")
 
     try:
-
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-
-        raw_text = response.text.strip()
-
-        raw_text = raw_text.replace("```json", "")
-        raw_text = raw_text.replace("```", "")
-
-        data = json.loads(raw_text)
-
+        data = json.loads(text)
         return data
 
     except Exception as e:
@@ -134,20 +113,22 @@ Resume:
             "faang_readiness": 0,
             "predicted_role": "Error",
             "roadmap": [],
-            "ai_feedback": str(e)
+            "ai_feedback": text
         }
 
 # =========================
-# ANALYZE TEXT RESUME
+# TEXT RESUME API
 # =========================
 
 @app.post("/analyze")
-def analyze_text_resume(data: ResumeRequest):
+async def analyze_resume(data: ResumeRequest):
 
-    return analyze_resume(data.resume_text)
+    result = analyze_resume_text(data.resume_text)
+
+    return result
 
 # =========================
-# UPLOAD PDF RESUME
+# PDF UPLOAD API
 # =========================
 
 @app.post("/upload")
@@ -157,9 +138,14 @@ async def upload_resume(file: UploadFile = File(...)):
 
         pdf_bytes = await file.read()
 
-        extracted_text = extract_pdf_text(pdf_bytes)
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-        result = analyze_resume(extracted_text)
+        text = ""
+
+        for page in doc:
+            text += page.get_text()
+
+        result = analyze_resume_text(text)
 
         return result
 
@@ -176,5 +162,6 @@ async def upload_resume(file: UploadFile = File(...)):
             "faang_readiness": 0,
             "predicted_role": "PDF Upload Error",
             "roadmap": [],
-            "ai_feedback": str(e)
+            "ai_feedback": ""
         }
+
