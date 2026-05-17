@@ -18,6 +18,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
+# =========================
+# GEMINI MODEL
+# =========================
+
 model = genai.GenerativeModel("gemini-1.5-flash")
 
 # =========================
@@ -46,7 +50,7 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# ROOT ROUTE
+# HOME ROUTE
 # =========================
 
 @app.get("/")
@@ -60,44 +64,92 @@ def home():
 def analyze_resume_text(resume_text):
 
     prompt = f"""
-    You are an expert ATS Resume Analyzer and FAANG Career Mentor.
+You are a world-class ATS Resume Analyzer, Career Mentor, and FAANG Hiring Expert.
 
-    Analyze this resume carefully.
+Analyze the following resume deeply.
 
-    Resume:
-    {resume_text}
+RESUME:
+{resume_text}
 
-    Return ONLY valid JSON in this exact format:
+Your task:
+- Evaluate ATS compatibility
+- Evaluate FAANG readiness
+- Predict most suitable role
+- Detect strengths and weaknesses
+- Detect missing industry skills
+- Generate a highly personalized career roadmap
+- Generate detailed career guidance
 
-    {{
-      "resume_score": 85,
-      "ats_score": 90,
-      "strengths": ["point1", "point2"],
-      "weaknesses": ["point1", "point2"],
-      "suggestions": ["point1", "point2"],
-      "found_skills": ["Python", "React"],
-      "missing_skills": ["Docker", "AWS"],
-      "faang_readiness": 80,
-      "predicted_role": "Software Engineer",
-      "roadmap": [
-        "Step 1",
-        "Step 2",
-        "Step 3"
-      ],
-      "ai_feedback": "Detailed personalized career guidance here."
-    }}
-    """
+IMPORTANT RULES:
+- Be VERY detailed
+- Be professional
+- Give realistic insights
+- Mention technical improvements
+- Mention resume formatting quality
+- Mention interview preparation guidance
+- Mention project improvements
+- Mention missing tools/frameworks
+- Give detailed roadmap steps
 
-    response = model.generate_content(prompt)
+Return ONLY valid JSON.
 
-    text = response.text.strip()
+FORMAT:
 
-    # remove markdown formatting
-    text = text.replace("```json", "")
-    text = text.replace("```", "")
+{{
+  "resume_score": 75,
+  "ats_score": 88,
+
+  "strengths": [
+    "Detailed point",
+    "Detailed point"
+  ],
+
+  "weaknesses": [
+    "Detailed point",
+    "Detailed point"
+  ],
+
+  "suggestions": [
+    "Detailed suggestion",
+    "Detailed suggestion"
+  ],
+
+  "found_skills": [
+    "Python",
+    "React"
+  ],
+
+  "missing_skills": [
+    "Docker",
+    "AWS"
+  ],
+
+  "faang_readiness": 50,
+
+  "predicted_role": "Software Engineer",
+
+  "roadmap": [
+    "Detailed roadmap step",
+    "Detailed roadmap step"
+  ],
+
+  "ai_feedback": "A VERY DETAILED personalized career analysis paragraph."
+}}
+"""
 
     try:
+
+        response = model.generate_content(prompt)
+
+        text = response.text.strip()
+
+        # remove markdown wrappers
+        text = text.replace("```json", "")
+        text = text.replace("```", "")
+        text = text.strip()
+
         data = json.loads(text)
+
         return data
 
     except Exception as e:
@@ -113,11 +165,11 @@ def analyze_resume_text(resume_text):
             "faang_readiness": 0,
             "predicted_role": "Error",
             "roadmap": [],
-            "ai_feedback": text
+            "ai_feedback": f"Error occurred: {str(e)}"
         }
 
 # =========================
-# TEXT RESUME API
+# TEXT ANALYSIS
 # =========================
 
 @app.post("/analyze")
@@ -128,7 +180,7 @@ async def analyze_resume(data: ResumeRequest):
     return result
 
 # =========================
-# PDF UPLOAD API
+# PDF ANALYSIS
 # =========================
 
 @app.post("/upload")
@@ -162,6 +214,6 @@ async def upload_resume(file: UploadFile = File(...)):
             "faang_readiness": 0,
             "predicted_role": "PDF Upload Error",
             "roadmap": [],
-            "ai_feedback": ""
+            "ai_feedback": f"PDF processing failed: {str(e)}"
         }
 
