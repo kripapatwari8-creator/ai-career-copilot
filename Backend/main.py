@@ -1,14 +1,15 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from openai import OpenAI
 from dotenv import load_dotenv
+from openai import OpenAI
 import fitz
-import os
 import json
+import os
+import re
 
 # =========================
-# LOAD ENV VARIABLES
+# LOAD ENV
 # =========================
 
 load_dotenv()
@@ -55,9 +56,54 @@ class ResumeRequest(BaseModel):
 
 @app.get("/")
 def home():
-    return {
-        "message": "AI Career Copilot Backend Running Successfully"
-    }
+    return {"message": "AI Career Copilot Backend Running"}
+
+# =========================
+# MODELS
+# =========================
+
+MODELS = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "microsoft/phi-3-mini-128k-instruct:free",
+    "google/gemma-2-9b-it:free",
+]
+
+# =========================
+# AI ANALYSIS
+# =========================
+
+def generate_ai_response(prompt):
+
+    for model_name in MODELS:
+
+        try:
+
+            completion = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert ATS Resume Analyzer and FAANG Career Mentor."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=2500,
+            )
+
+            return completion.choices[0].message.content
+
+        except Exception as e:
+
+            print(f"Model failed: {model_name}")
+            print(e)
+
+            continue
+
+    return None
 
 # =========================
 # ANALYZE FUNCTION
@@ -66,96 +112,62 @@ def home():
 def analyze_resume_text(resume_text):
 
     prompt = f"""
-You are an expert ATS Resume Analyzer, FAANG Career Mentor, and Hiring Manager.
-
-Analyze the following resume in depth.
+Analyze this resume carefully.
 
 Resume:
 {resume_text}
 
-IMPORTANT:
 Return ONLY valid JSON.
-DO NOT add markdown.
-DO NOT add explanation outside JSON.
 
-Use this EXACT structure:
+Format:
 
 {{
   "resume_score": 75,
   "ats_score": 88,
-  "strengths": [
-    "point1",
-    "point2"
-  ],
-  "weaknesses": [
-    "point1",
-    "point2"
-  ],
-  "suggestions": [
-    "point1",
-    "point2"
-  ],
-  "found_skills": [
-    "Python",
-    "React"
-  ],
-  "missing_skills": [
-    "Docker",
-    "AWS"
-  ],
-  "faang_readiness": 40,
+  "strengths": ["point1"],
+  "weaknesses": ["point1"],
+  "suggestions": ["point1"],
+  "found_skills": ["Python"],
+  "missing_skills": ["Docker"],
+  "faang_readiness": 50,
   "predicted_role": "Software Engineer",
   "roadmap": [
-    "step1",
-    "step2",
-    "step3"
+    "Step 1",
+    "Step 2"
   ],
-  "ai_feedback": "Very detailed personalized career guidance."
+  "ai_feedback": "Detailed personalized career guidance."
 }}
+
+Make the feedback extremely detailed and personalized.
 """
+
+    response = generate_ai_response(prompt)
+
+    if not response:
+
+        return {
+            "resume_score": 0,
+            "ats_score": 0,
+            "strengths": [],
+            "weaknesses": [],
+            "suggestions": [
+                "All AI providers are currently rate limited. Please retry after some time."
+            ],
+            "found_skills": [],
+            "missing_skills": [],
+            "faang_readiness": 0,
+            "predicted_role": "AI Service Unavailable",
+            "roadmap": [],
+            "ai_feedback": "The AI service is temporarily overloaded."
+        }
 
     try:
 
-        completion = client.chat.completions.create(
-            model="mistralai/mistral-7b-instruct",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0.7,
-            max_tokens=2000,
-        )
+        cleaned = re.sub(r"```json|```", "", response).strip()
 
-        text = completion.choices[0].message.content.strip()
+        data = json.loads(cleaned)
 
-        # remove markdown if AI adds it
-        text = text.replace("```json", "")
-        text = text.replace("```", "")
-        text = text.strip()
-
-        try:
-
-            data = json.loads(text)
-
-            return data
-
-        except Exception as json_error:
-
-            return {
-                "resume_score": 0,
-                "ats_score": 0,
-                "strengths": [],
-                "weaknesses": [],
-                "suggestions": [f"JSON Parsing Error: {str(json_error)}"],
-                "found_skills": [],
-                "missing_skills": [],
-                "faang_readiness": 0,
-                "predicted_role": "Parsing Error",
-                "roadmap": [],
-                "ai_feedback": text
-            }
+        return data
 
     except Exception as e:
 
@@ -168,13 +180,13 @@ Use this EXACT structure:
             "found_skills": [],
             "missing_skills": [],
             "faang_readiness": 0,
-            "predicted_role": "AI Service Unavailable",
+            "predicted_role": "JSON Error",
             "roadmap": [],
-            "ai_feedback": "The AI service is currently unavailable."
+            "ai_feedback": response
         }
 
 # =========================
-# TEXT ANALYSIS API
+# ANALYZE TEXT API
 # =========================
 
 @app.post("/analyze")
@@ -201,22 +213,6 @@ async def upload_resume(file: UploadFile = File(...)):
 
         for page in doc:
             text += page.get_text()
-
-        if not text.strip():
-
-            return {
-                "resume_score": 0,
-                "ats_score": 0,
-                "strengths": [],
-                "weaknesses": [],
-                "suggestions": ["Could not extract text from PDF."],
-                "found_skills": [],
-                "missing_skills": [],
-                "faang_readiness": 0,
-                "predicted_role": "Invalid PDF",
-                "roadmap": [],
-                "ai_feedback": ""
-            }
 
         result = analyze_resume_text(text)
 
