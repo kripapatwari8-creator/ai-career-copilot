@@ -1,11 +1,11 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
-import os
+from openai import OpenAI
 from dotenv import load_dotenv
 import fitz
 import json
+import os
 
 # =========================
 # LOAD ENV VARIABLES
@@ -13,39 +13,18 @@ import json
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-genai.configure(api_key=GEMINI_API_KEY)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 # =========================
-# TRY AVAILABLE MODELS
+# OPENROUTER CLIENT
 # =========================
 
-AVAILABLE_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-]
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENROUTER_API_KEY,
+)
 
-model = None
-
-for model_name in AVAILABLE_MODELS:
-
-    try:
-
-        temp_model = genai.GenerativeModel(model_name)
-
-        test = temp_model.generate_content("Hello")
-
-        if test:
-
-            model = temp_model
-            print(f"Using Gemini Model: {model_name}")
-            break
-
-    except Exception as e:
-
-        print(f"Model failed: {model_name}")
-        print(e)
+MODEL_NAME = "deepseek/deepseek-chat-v3-0324:free"
 
 # =========================
 # FASTAPI APP
@@ -73,7 +52,7 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# ROOT ROUTE
+# HOME ROUTE
 # =========================
 
 @app.get("/")
@@ -81,99 +60,54 @@ def home():
     return {"message": "AI Career Copilot Backend Running"}
 
 # =========================
-# RESUME ANALYZER
+# ANALYZE FUNCTION
 # =========================
 
 def analyze_resume_text(resume_text):
 
-    # =========================
-    # IF MODEL FAILED
-    # =========================
-
-    if model is None:
-
-        return {
-            "resume_score": 0,
-            "ats_score": 0,
-            "strengths": [],
-            "weaknesses": [],
-            "suggestions": [
-                "Gemini API quota exceeded OR invalid API key."
-            ],
-            "found_skills": [],
-            "missing_skills": [],
-            "faang_readiness": 0,
-            "predicted_role": "AI Service Unavailable",
-            "roadmap": [],
-            "ai_feedback": "The AI service is currently unavailable due to API quota limits."
-        }
-
-    # =========================
-    # PROMPT
-    # =========================
-
     prompt = f"""
-You are an expert ATS Resume Analyzer and FAANG Career Mentor.
+You are an elite ATS Resume Analyzer and FAANG Career Mentor.
 
-Analyze the following resume deeply and professionally.
+Analyze the following resume in EXTREME DETAIL.
 
 Resume:
 {resume_text}
 
-Return ONLY VALID JSON.
-
-Format:
+Return ONLY valid JSON in this exact format:
 
 {{
-  "resume_score": 75,
-  "ats_score": 88,
-  "strengths": [
-    "point1",
-    "point2"
-  ],
-  "weaknesses": [
-    "point1",
-    "point2"
-  ],
-  "suggestions": [
-    "point1",
-    "point2"
-  ],
-  "found_skills": [
-    "Python",
-    "React"
-  ],
-  "missing_skills": [
-    "Docker",
-    "AWS"
-  ],
-  "faang_readiness": 40,
+  "resume_score": 85,
+  "ats_score": 90,
+  "strengths": ["point1", "point2"],
+  "weaknesses": ["point1", "point2"],
+  "suggestions": ["point1", "point2"],
+  "found_skills": ["Python", "React"],
+  "missing_skills": ["Docker", "AWS"],
+  "faang_readiness": 80,
   "predicted_role": "Software Engineer",
   "roadmap": [
-    "step1",
-    "step2",
-    "step3"
+    "Step 1",
+    "Step 2",
+    "Step 3"
   ],
-  "ai_feedback": "Give detailed personalized career guidance."
+  "ai_feedback": "Very detailed personalized career guidance."
 }}
-
-IMPORTANT:
-- Give detailed roadmap
-- Give ATS-specific suggestions
-- Give realistic FAANG readiness
-- Give detailed career guidance paragraph
-- Return ONLY JSON
 """
-
-    # =========================
-    # GEMINI CALL
-    # =========================
 
     try:
 
-        response = model.generate_content(prompt)
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0.7
+        )
 
-        text = response.text.strip()
+        text = response.choices[0].message.content.strip()
 
         text = text.replace("```json", "")
         text = text.replace("```", "")
@@ -193,13 +127,13 @@ IMPORTANT:
             "found_skills": [],
             "missing_skills": [],
             "faang_readiness": 0,
-            "predicted_role": "AI Error",
+            "predicted_role": "AI Service Error",
             "roadmap": [],
-            "ai_feedback": f"Error occurred: {str(e)}"
+            "ai_feedback": str(e)
         }
 
 # =========================
-# TEXT ANALYSIS API
+# TEXT ANALYSIS
 # =========================
 
 @app.post("/analyze")
@@ -210,7 +144,7 @@ async def analyze_resume(data: ResumeRequest):
     return result
 
 # =========================
-# PDF UPLOAD API
+# PDF UPLOAD
 # =========================
 
 @app.post("/upload")
@@ -244,5 +178,5 @@ async def upload_resume(file: UploadFile = File(...)):
             "faang_readiness": 0,
             "predicted_role": "PDF Upload Error",
             "roadmap": [],
-            "ai_feedback": ""
+            "ai_feedback": str(e)
         }
