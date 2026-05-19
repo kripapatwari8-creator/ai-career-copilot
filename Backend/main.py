@@ -4,8 +4,8 @@ from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 import fitz
-import json
 import os
+import json
 
 # =========================
 # LOAD ENV VARIABLES
@@ -23,8 +23,6 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
 )
-
-MODEL_NAME = "deepseek/deepseek-chat-v3-0324:free"
 
 # =========================
 # FASTAPI APP
@@ -52,12 +50,14 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# HOME ROUTE
+# ROOT ROUTE
 # =========================
 
 @app.get("/")
 def home():
-    return {"message": "AI Career Copilot Backend Running"}
+    return {
+        "message": "AI Career Copilot Backend Running Successfully"
+    }
 
 # =========================
 # ANALYZE FUNCTION
@@ -66,29 +66,49 @@ def home():
 def analyze_resume_text(resume_text):
 
     prompt = f"""
-You are an elite ATS Resume Analyzer and FAANG Career Mentor.
+You are an expert ATS Resume Analyzer, FAANG Career Mentor, and Hiring Manager.
 
-Analyze the following resume in EXTREME DETAIL.
+Analyze the following resume in depth.
 
 Resume:
 {resume_text}
 
-Return ONLY valid JSON in this exact format:
+IMPORTANT:
+Return ONLY valid JSON.
+DO NOT add markdown.
+DO NOT add explanation outside JSON.
+
+Use this EXACT structure:
 
 {{
-  "resume_score": 85,
-  "ats_score": 90,
-  "strengths": ["point1", "point2"],
-  "weaknesses": ["point1", "point2"],
-  "suggestions": ["point1", "point2"],
-  "found_skills": ["Python", "React"],
-  "missing_skills": ["Docker", "AWS"],
-  "faang_readiness": 80,
+  "resume_score": 75,
+  "ats_score": 88,
+  "strengths": [
+    "point1",
+    "point2"
+  ],
+  "weaknesses": [
+    "point1",
+    "point2"
+  ],
+  "suggestions": [
+    "point1",
+    "point2"
+  ],
+  "found_skills": [
+    "Python",
+    "React"
+  ],
+  "missing_skills": [
+    "Docker",
+    "AWS"
+  ],
+  "faang_readiness": 40,
   "predicted_role": "Software Engineer",
   "roadmap": [
-    "Step 1",
-    "Step 2",
-    "Step 3"
+    "step1",
+    "step2",
+    "step3"
   ],
   "ai_feedback": "Very detailed personalized career guidance."
 }}
@@ -96,25 +116,46 @@ Return ONLY valid JSON in this exact format:
 
     try:
 
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
+        completion = client.chat.completions.create(
+            model="mistralai/mistral-7b-instruct",
             messages=[
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.7
+            temperature=0.7,
+            max_tokens=2000,
         )
 
-        text = response.choices[0].message.content.strip()
+        text = completion.choices[0].message.content.strip()
 
+        # remove markdown if AI adds it
         text = text.replace("```json", "")
         text = text.replace("```", "")
+        text = text.strip()
 
-        data = json.loads(text)
+        try:
 
-        return data
+            data = json.loads(text)
+
+            return data
+
+        except Exception as json_error:
+
+            return {
+                "resume_score": 0,
+                "ats_score": 0,
+                "strengths": [],
+                "weaknesses": [],
+                "suggestions": [f"JSON Parsing Error: {str(json_error)}"],
+                "found_skills": [],
+                "missing_skills": [],
+                "faang_readiness": 0,
+                "predicted_role": "Parsing Error",
+                "roadmap": [],
+                "ai_feedback": text
+            }
 
     except Exception as e:
 
@@ -127,13 +168,13 @@ Return ONLY valid JSON in this exact format:
             "found_skills": [],
             "missing_skills": [],
             "faang_readiness": 0,
-            "predicted_role": "AI Service Error",
+            "predicted_role": "AI Service Unavailable",
             "roadmap": [],
-            "ai_feedback": str(e)
+            "ai_feedback": "The AI service is currently unavailable."
         }
 
 # =========================
-# TEXT ANALYSIS
+# TEXT ANALYSIS API
 # =========================
 
 @app.post("/analyze")
@@ -144,7 +185,7 @@ async def analyze_resume(data: ResumeRequest):
     return result
 
 # =========================
-# PDF UPLOAD
+# PDF UPLOAD API
 # =========================
 
 @app.post("/upload")
@@ -160,6 +201,22 @@ async def upload_resume(file: UploadFile = File(...)):
 
         for page in doc:
             text += page.get_text()
+
+        if not text.strip():
+
+            return {
+                "resume_score": 0,
+                "ats_score": 0,
+                "strengths": [],
+                "weaknesses": [],
+                "suggestions": ["Could not extract text from PDF."],
+                "found_skills": [],
+                "missing_skills": [],
+                "faang_readiness": 0,
+                "predicted_role": "Invalid PDF",
+                "roadmap": [],
+                "ai_feedback": ""
+            }
 
         result = analyze_resume_text(text)
 
@@ -178,5 +235,5 @@ async def upload_resume(file: UploadFile = File(...)):
             "faang_readiness": 0,
             "predicted_role": "PDF Upload Error",
             "roadmap": [],
-            "ai_feedback": str(e)
+            "ai_feedback": ""
         }
