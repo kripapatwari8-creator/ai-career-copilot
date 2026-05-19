@@ -1,12 +1,11 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from groq import Groq
 from dotenv import load_dotenv
-from openai import OpenAI
 import fitz
 import json
 import os
-import re
 
 # =========================
 # LOAD ENV
@@ -14,19 +13,12 @@ import re
 
 load_dotenv()
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+client = Groq(api_key=GROQ_API_KEY)
 
 # =========================
-# OPENROUTER CLIENT
-# =========================
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_API_KEY,
-)
-
-# =========================
-# FASTAPI APP
+# FASTAPI
 # =========================
 
 app = FastAPI()
@@ -51,59 +43,12 @@ class ResumeRequest(BaseModel):
     resume_text: str
 
 # =========================
-# ROOT ROUTE
+# ROOT
 # =========================
 
 @app.get("/")
 def home():
     return {"message": "AI Career Copilot Backend Running"}
-
-# =========================
-# MODELS
-# =========================
-
-MODELS = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "microsoft/phi-3-mini-128k-instruct:free",
-    "google/gemma-2-9b-it:free",
-]
-
-# =========================
-# AI ANALYSIS
-# =========================
-
-def generate_ai_response(prompt):
-
-    for model_name in MODELS:
-
-        try:
-
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert ATS Resume Analyzer and FAANG Career Mentor."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.7,
-                max_tokens=2500,
-            )
-
-            return completion.choices[0].message.content
-
-        except Exception as e:
-
-            print(f"Model failed: {model_name}")
-            print(e)
-
-            continue
-
-    return None
 
 # =========================
 # ANALYZE FUNCTION
@@ -112,60 +57,52 @@ def generate_ai_response(prompt):
 def analyze_resume_text(resume_text):
 
     prompt = f"""
-Analyze this resume carefully.
+You are an expert ATS Resume Analyzer and FAANG Career Mentor.
+
+Analyze the following resume deeply.
 
 Resume:
 {resume_text}
 
-Return ONLY valid JSON.
+Return ONLY VALID JSON.
 
 Format:
 
 {{
-  "resume_score": 75,
-  "ats_score": 88,
-  "strengths": ["point1"],
-  "weaknesses": ["point1"],
-  "suggestions": ["point1"],
-  "found_skills": ["Python"],
-  "missing_skills": ["Docker"],
-  "faang_readiness": 50,
-  "predicted_role": "Software Engineer",
-  "roadmap": [
-    "Step 1",
-    "Step 2"
-  ],
-  "ai_feedback": "Detailed personalized career guidance."
+  "resume_score": 85,
+  "ats_score": 90,
+  "strengths": [],
+  "weaknesses": [],
+  "suggestions": [],
+  "found_skills": [],
+  "missing_skills": [],
+  "faang_readiness": 80,
+  "predicted_role": "",
+  "roadmap": [],
+  "ai_feedback": ""
 }}
-
-Make the feedback extremely detailed and personalized.
 """
-
-    response = generate_ai_response(prompt)
-
-    if not response:
-
-        return {
-            "resume_score": 0,
-            "ats_score": 0,
-            "strengths": [],
-            "weaknesses": [],
-            "suggestions": [
-                "All AI providers are currently rate limited. Please retry after some time."
-            ],
-            "found_skills": [],
-            "missing_skills": [],
-            "faang_readiness": 0,
-            "predicted_role": "AI Service Unavailable",
-            "roadmap": [],
-            "ai_feedback": "The AI service is temporarily overloaded."
-        }
 
     try:
 
-        cleaned = re.sub(r"```json|```", "", response).strip()
+        completion = client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ],
+    temperature=0.5,
+    max_tokens=2500
+)
 
-        data = json.loads(cleaned)
+        text = completion.choices[0].message.content.strip()
+
+        text = text.replace("```json", "")
+        text = text.replace("```", "")
+
+        data = json.loads(text)
 
         return data
 
@@ -180,13 +117,13 @@ Make the feedback extremely detailed and personalized.
             "found_skills": [],
             "missing_skills": [],
             "faang_readiness": 0,
-            "predicted_role": "JSON Error",
+            "predicted_role": "AI Service Unavailable",
             "roadmap": [],
-            "ai_feedback": response
+            "ai_feedback": "AI provider failed."
         }
 
 # =========================
-# ANALYZE TEXT API
+# ANALYZE TEXT
 # =========================
 
 @app.post("/analyze")
@@ -197,7 +134,7 @@ async def analyze_resume(data: ResumeRequest):
     return result
 
 # =========================
-# PDF UPLOAD API
+# PDF UPLOAD
 # =========================
 
 @app.post("/upload")
