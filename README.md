@@ -1,67 +1,56 @@
-# AI Career Copilot
+AI Career Copilot
 
-AI-powered Resume Analyzer + ATS Checker + FAANG Career Mentor
+AI-powered Resume Analyzer + ATS Checker + FAANG Career Mentor.
 
-## Features
-
-- Resume Score Analysis
-- ATS Compatibility Check
-- FAANG Readiness Score
-- Skill Gap Detection
-- PDF Resume Upload
-- Personalized Learning Roadmap
+# Features:
+- Resume ATS Score Analysis
 - AI Career Guidance
-- Modern UI with React
-- FastAPI Backend
-- Gemini AI Integration
+- Resume Skill Detection
+- FAANG Readiness Score
+- Personalized Learning Roadmap
+- PDF Resume Upload
+- Resume Improvement Suggestions
 
-# Tech Stack
-
+# Tech Stack:
 # Frontend
 - React.js
 - Tailwind CSS
-
 # Backend
 - FastAPI
-- Python
-
-# AI
-- Google Gemini API
+- Groq API (Llama 3)
+- PyMuPDF
 
 # Deployment
-- Vercel
-- Render
+- Vercel (Frontend)
+- Render (Backend)
 
-#Project Screenshots
-
-(Add screenshots here later)
-
-<img width="941" height="461" alt="image" src="https://github.com/user-attachments/assets/b0ebe513-2730-407d-902b-9bf024c80ae5" />
-<img width="946" height="497" alt="image" src="https://github.com/user-attachments/assets/5e9945af-8f34-4298-ba07-823f261e9890" />
-<img width="896" height="421" alt="image" src="https://github.com/user-attachments/assets/d1d08fc0-9b81-4bff-bae2-469ff793d98b" />
-
-
-# Live Demo
+## Live Demo
 
 Frontend:
-https://ai-career-copilot-git-main-kp-s-projects2.vercel.app/
+https://ai-career-copilot-fawn.vercel.app/
 
 Backend:
 https://career-copilot-backend2.onrender.com/docs
 
+# Screenshots
+
+# Homepage
+
+<img width="959" height="497" alt="image" src="https://github.com/user-attachments/assets/412c1ab2-3b71-4778-928a-9a9b416b638f" />
+
+# Resume Analysis
+<img width="943" height="497" alt="image" src="https://github.com/user-attachments/assets/26f6a458-5b5d-4cab-bd4d-42f4d0c67e57" />
+<img width="886" height="403" alt="image" src="https://github.com/user-attachments/assets/226c0646-8787-4422-9291-969319edb6e3" />
+
 # Installation
 
-# Frontend
-
-bash
-cd frontend
-npm install
-npm start
-
 # Backend
+bash
+a)cd Backend
+b)pip install -r requirements.txt
+c)uvicorn main:app --reload
 
-cd backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload
+# Frontend
+a)cd frontend
+b)npm install
+c)npm start
